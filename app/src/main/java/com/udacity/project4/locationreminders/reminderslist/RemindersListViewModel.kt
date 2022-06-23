@@ -1,6 +1,7 @@
 package com.udacity.project4.locationreminders.reminderslist
 
 import android.app.Application
+import androidx.annotation.VisibleForTesting
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
 import com.udacity.project4.base.BaseViewModel
@@ -54,7 +55,8 @@ class RemindersListViewModel(
     /**
      * Inform the user that there's not any data if the remindersList is empty
      */
-    private fun invalidateShowNoData() {
+    @VisibleForTesting
+    fun invalidateShowNoData() {
         showNoData.value = remindersList.value == null || remindersList.value!!.isEmpty()
     }
 }

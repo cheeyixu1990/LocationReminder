@@ -2,9 +2,8 @@ package com.udacity.project4.locationreminders.data
 
 import com.udacity.project4.locationreminders.data.dto.ReminderDTO
 import com.udacity.project4.locationreminders.data.dto.Result
-import com.udacity.project4.locationreminders.reminderslist.ReminderDataItem
 
-class FakeDataSource(var reminders: MutableList<ReminderDTO>? = mutableListOf()) : ReminderDataSource {
+class FakeAndroidDataSource(var reminders: MutableList<ReminderDTO>? = mutableListOf()) : ReminderDataSource {
 
     override suspend fun getReminders(): Result<List<ReminderDTO>> {
         reminders?.let { return Result.Success(ArrayList(it)) }

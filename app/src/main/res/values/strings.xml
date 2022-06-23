@@ -43,4 +43,6 @@
     <string name="login_btn">LOGIN</string>
     <string name="user_signed_out">You have signed out.</string>
     <string name="save_btn">SAVE</string>
+    <string name="description_label">Description</string>
+    <string name="title">Title</string>
 </resources>
