@@ -23,10 +23,11 @@ import org.junit.Test
 import org.junit.rules.TestWatcher
 import org.junit.runner.Description
 import org.junit.runner.RunWith
+import org.koin.test.AutoCloseKoinTest
 
 @RunWith(AndroidJUnit4::class)
 @ExperimentalCoroutinesApi
-class RemindersListViewModelTest {
+class RemindersListViewModelTest: AutoCloseKoinTest() {
 
     private lateinit var remindersListViewModel: RemindersListViewModel
 
