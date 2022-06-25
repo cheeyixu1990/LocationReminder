@@ -9,10 +9,7 @@ import com.udacity.project4.locationreminders.getOrAwaitValue
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.test.TestCoroutineDispatcher
-import kotlinx.coroutines.test.TestCoroutineScope
-import kotlinx.coroutines.test.resetMain
-import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.test.*
 import org.hamcrest.CoreMatchers
 import org.hamcrest.CoreMatchers.`is`
 import org.hamcrest.MatcherAssert
@@ -62,11 +59,32 @@ class RemindersListViewModelTest: AutoCloseKoinTest() {
     }
 
     @Test
+    fun loadReminders_noDataReturnInDataSource_returnError() {
+        reminderDataSource.setReturnError(true)
+        remindersListViewModel.loadReminders()
+
+        assertThat(remindersListViewModel.showSnackBar.getOrAwaitValue(), `is`("Test - Tasks not found"))
+    }
+
+    @Test
     fun loadReminders_data_invalidateShowNoData_returnFalse() {
         remindersListViewModel.loadReminders()
 
         assertThat(remindersListViewModel.remindersList.getOrAwaitValue().count(), `is`(4))
         assertThat(remindersListViewModel.showNoData.getOrAwaitValue(), `is`(false))
+    }
+
+    @Test
+    fun remindersLoading_testLoading() {
+        mainCoroutineRule.pauseDispatcher()
+
+        remindersListViewModel.loadReminders()
+
+        assertThat(remindersListViewModel.showLoading.getOrAwaitValue(), `is`(true))
+
+        mainCoroutineRule.resumeDispatcher()
+
+        assertThat(remindersListViewModel.showLoading.getOrAwaitValue(), `is`(false))
     }
 }
 

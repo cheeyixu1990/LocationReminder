@@ -112,4 +112,17 @@ class RemindersLocalRepositoryTest {
         result as Result.Success
         assertThat(result.data.count(), `is`(0))
     }
+
+    @Test
+    fun saveOneReminderAndGetWithWrongId() = runBlocking {
+        val reminder1 = ReminderDTO("Title1", "Description1", "Location1", 1.0, 1.0, "1")
+
+        remindersLocalRepository.saveReminder(reminder1)
+
+        val result = remindersLocalRepository.getReminder("2")
+
+        assertThat(result.succeeded, `is`(false))
+        result as Result.Error
+        assertThat(result.message, `is`("Reminder not found!"))
+    }
 }
