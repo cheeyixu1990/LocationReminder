@@ -1,26 +1,23 @@
 package com.udacity.project4
 
+import android.Manifest
+import android.annotation.TargetApi
 import android.app.Application
-import android.view.View
-import android.widget.TextView
-import androidx.appcompat.widget.AppCompatTextView
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider.getApplicationContext
 import androidx.test.espresso.Espresso
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.IdlingRegistry
-import androidx.test.espresso.UiController
-import androidx.test.espresso.ViewAction
 import androidx.test.espresso.action.ViewActions.*
 import androidx.test.espresso.assertion.ViewAssertions.matches
 import androidx.test.espresso.matcher.RootMatchers.withDecorView
 import androidx.test.espresso.matcher.ViewMatchers.*
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.LargeTest
+import androidx.test.rule.GrantPermissionRule
 import com.google.android.material.internal.ContextUtils.getActivity
 import com.udacity.project4.locationreminders.RemindersActivity
 import com.udacity.project4.locationreminders.data.ReminderDataSource
-import com.udacity.project4.locationreminders.data.dto.ReminderDTO
 import com.udacity.project4.locationreminders.data.local.LocalDB
 import com.udacity.project4.locationreminders.data.local.RemindersLocalRepository
 import com.udacity.project4.locationreminders.reminderslist.RemindersListViewModel
@@ -29,12 +26,11 @@ import com.udacity.project4.util.DataBindingIdlingResource
 import com.udacity.project4.util.monitorActivity
 import com.udacity.project4.utils.EspressoIdlingResource
 import kotlinx.coroutines.runBlocking
-import org.hamcrest.CoreMatchers
 import org.hamcrest.CoreMatchers.`is`
 import org.hamcrest.CoreMatchers.not
-import org.hamcrest.Matcher
 import org.junit.After
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.koin.androidx.viewmodel.dsl.viewModel
@@ -54,6 +50,14 @@ class RemindersActivityTest :
     private lateinit var repository: ReminderDataSource
     private lateinit var appContext: Application
     val dataBindingIdlingResource = DataBindingIdlingResource()
+
+    @get: Rule
+    var foregroundLocationPermissionRule: GrantPermissionRule? =
+        GrantPermissionRule.grant(Manifest.permission.ACCESS_FINE_LOCATION)
+
+    @get: Rule
+    var backgroundLocationPermissionRule: GrantPermissionRule? =
+        GrantPermissionRule.grant(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
 
     @Before
     fun registerIdlingResource(): Unit = IdlingRegistry.getInstance().run {
@@ -104,14 +108,15 @@ class RemindersActivityTest :
     }
 
     @Test
-    fun displayListZeroReminder_addReminder_displayListOneReminder_smooth() {
+    fun displayListZeroReminder_addReminder_displayListOneReminder() {
+        // Test is successful provided location permissions are provided already
+
         val scenario = ActivityScenario.launch(RemindersActivity::class.java)
 
         dataBindingIdlingResource.monitorActivity(scenario)
 
         onView(withId(R.id.noDataTextView)).check(matches(isDisplayed()))
         onView(withId(R.id.addReminderFAB)).perform(click())
-        onView(withId(R.id.reminderTitle)).perform(typeText("Title1"))
         onView(withId(R.id.reminderDescription)).perform(typeText("Description1"))
         Espresso.closeSoftKeyboard()
         onView(withId(R.id.selectLocation)).perform(click())
@@ -119,6 +124,17 @@ class RemindersActivityTest :
         Thread.sleep(1000)
         onView(withId(R.id.map)).perform(longClick())
         onView(withId(R.id.btn_save)).perform(click())
+        onView(withId(R.id.saveReminder)).perform(click())
+        onView(withId(com.google.android.material.R.id.snackbar_text))
+            .check(matches(withText(R.string.err_enter_title)))
+
+        Thread.sleep(1500)
+
+        onView(withId(R.id.reminderTitle)).perform(typeText("Title1"))
+        Espresso.closeSoftKeyboard()
+
+        Thread.sleep(500)
+
         onView(withId(R.id.saveReminder)).perform(click())
 
         onView(withText(R.string.reminder_saved)).inRoot(withDecorView(not(`is`(getActivity(appContext)?.getWindow()?.getDecorView())))).check(matches(isDisplayed()))

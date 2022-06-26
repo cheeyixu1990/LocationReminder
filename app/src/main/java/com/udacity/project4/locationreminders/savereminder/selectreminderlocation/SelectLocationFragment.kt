@@ -3,21 +3,31 @@ package com.udacity.project4.locationreminders.savereminder.selectreminderlocati
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.annotation.TargetApi
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.Resources
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
+import android.util.Log
 import android.view.*
 import androidx.core.app.ActivityCompat
 import androidx.databinding.DataBindingUtil
-import androidx.navigation.fragment.findNavController
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.SupportMapFragment
-import com.google.android.gms.maps.model.*
+import com.google.android.gms.maps.model.BitmapDescriptorFactory
+import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.maps.model.MapStyleOptions
+import com.google.android.gms.maps.model.MarkerOptions
 import com.google.android.material.snackbar.Snackbar
+import com.udacity.project4.BuildConfig
 import com.udacity.project4.R
 import com.udacity.project4.base.BaseFragment
 import com.udacity.project4.base.NavigationCommand
@@ -29,6 +39,8 @@ import org.koin.android.ext.android.inject
 import java.util.*
 
 
+private const val TAG = "LRSelectLocFrag"
+
 class SelectLocationFragment : BaseFragment(), LocationListener {
 
     //Use Koin to get the view model of the SaveReminder
@@ -38,6 +50,10 @@ class SelectLocationFragment : BaseFragment(), LocationListener {
     private var locationManager: LocationManager? = null
     private val MIN_TIME: Long = 400
     private val MIN_DISTANCE = 1000f
+    private val REQUEST_FOREGROUND_ONLY_PERMISSIONS_REQUEST_CODE = 123
+    companion object {
+        val isRunningQAndAbove = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
+    }
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
@@ -58,7 +74,6 @@ class SelectLocationFragment : BaseFragment(), LocationListener {
                 _viewModel.navigationCommand.value = NavigationCommand.Back
             }
         }
-
         return binding.root
     }
 
@@ -67,7 +82,6 @@ class SelectLocationFragment : BaseFragment(), LocationListener {
         super.onViewCreated(view, savedInstanceState)
         val mapFragment = childFragmentManager.findFragmentById(R.id.map) as SupportMapFragment?
         locationManager =  requireContext().getSystemService(Context.LOCATION_SERVICE) as LocationManager
-        locationManager!!.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, MIN_TIME, MIN_DISTANCE, this)
         mapFragment?.getMapAsync{
             map = it
             val location: LatLng
@@ -75,17 +89,46 @@ class SelectLocationFragment : BaseFragment(), LocationListener {
             val singapore = LatLng(1.3521, 103.8198)
             if (_viewModel.marker.value != null){
                 location = LatLng(_viewModel.latitude.value!!, _viewModel.longitude.value!!)
-                zoomLevel = 13f
+                zoomLevel = 17f
                 addMarker(location, map)
             } else {
                 location = singapore
-                zoomLevel = 10f
+                zoomLevel = 12f
             }
             map.moveCamera(CameraUpdateFactory.newLatLngZoom(location, zoomLevel))
-            map.setMyLocationEnabled(true)
+            if (isForegroundLocationPermissionApproved()){
+                map.setMyLocationEnabled(true)
+                locationManager!!.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, MIN_TIME, MIN_DISTANCE, this)
+            } else {
+                requestForegroundLocationAccessPermissions()
+            }
+            map.setOnCameraIdleListener {
+                val zoomLevel = map.cameraPosition.zoom.toInt()
+                Log.d(TAG, "Zoom level: ${zoomLevel}")
+            }
             setMapLongClick(map)
             setPoiSelected(map)
+            setMapStyle(map)
         }
+    }
+
+    private fun setMapStyle(map: GoogleMap) {
+        try {
+            // Customize the styling of the base map using a JSON object defined
+            // in a raw resource file.
+            val success = map.setMapStyle(
+                MapStyleOptions.loadRawResourceStyle(
+                    requireContext(),
+                    R.raw.map_style
+                )
+            )
+            if (!success) {
+                Log.e(TAG, "Style parsing failed.")
+            }
+        }catch (e: Resources.NotFoundException) {
+            Log.e(TAG, "Can't find style. Error: ", e)
+        }
+
     }
 
     private fun setPoiSelected(map: GoogleMap) {
@@ -141,11 +184,6 @@ class SelectLocationFragment : BaseFragment(), LocationListener {
         }
     }
 
-    private fun onLocationSelected() {
-
-    }
-
-
     override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {
         inflater.inflate(R.menu.map_options, menu)
     }
@@ -173,11 +211,52 @@ class SelectLocationFragment : BaseFragment(), LocationListener {
     override fun onLocationChanged(it: Location) {
         if (_viewModel.marker.value == null){
             val latLng = LatLng(it.getLatitude(), it.getLongitude())
-            val cameraUpdate = CameraUpdateFactory.newLatLngZoom(latLng, 13f)
+            val cameraUpdate = CameraUpdateFactory.newLatLngZoom(latLng, 17f)
             map.animateCamera(cameraUpdate)
         }
         locationManager!!.removeUpdates(this)
     }
 
+    @TargetApi(29)
+    private fun isForegroundLocationPermissionApproved(): Boolean {
+        return PackageManager.PERMISSION_GRANTED == ActivityCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION)
+    }
 
+    @TargetApi(29 )
+    private fun requestForegroundLocationAccessPermissions() {
+        if (isForegroundLocationPermissionApproved())
+            return
+        val permissionsArray = arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
+        val resultCode = REQUEST_FOREGROUND_ONLY_PERMISSIONS_REQUEST_CODE
+
+        requestPermissions(
+            permissionsArray,
+            resultCode
+        )
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<String>,
+        grantResults: IntArray
+    ) {
+        if (requestCode == REQUEST_FOREGROUND_ONLY_PERMISSIONS_REQUEST_CODE)
+        {
+            if (grantResults.isEmpty() || grantResults[0] == PackageManager.PERMISSION_DENIED){
+                Snackbar.make(
+                    binding.mapSelectionView,
+                    R.string.foreground_permission_denied_explanation,
+                    Snackbar.LENGTH_LONG
+                )
+                    .setAction(R.string.settings) {
+                        startActivity(Intent().apply {
+                            action = Settings.ACTION_APPLICATION_DETAILS_SETTINGS
+                            data = Uri.fromParts("package", BuildConfig.APPLICATION_ID, null)
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        })
+                    }
+                    .show()
+            }
+        }
+    }
 }

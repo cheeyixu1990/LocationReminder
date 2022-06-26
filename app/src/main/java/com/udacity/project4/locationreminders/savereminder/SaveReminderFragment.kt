@@ -1,16 +1,23 @@
 package com.udacity.project4.locationreminders.savereminder
 
+import android.Manifest
 import android.annotation.SuppressLint
+import android.annotation.TargetApi
 import android.app.PendingIntent
 import android.app.PendingIntent.*
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
+import androidx.annotation.RequiresApi
+import androidx.core.app.ActivityCompat
 import androidx.databinding.DataBindingUtil
 import com.google.android.gms.location.Geofence
 import com.google.android.gms.location.GeofencingClient
@@ -21,6 +28,8 @@ import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.SupportMapFragment
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.MarkerOptions
+import com.google.android.material.snackbar.Snackbar
+import com.udacity.project4.BuildConfig
 import com.udacity.project4.R
 import com.udacity.project4.base.BaseFragment
 import com.udacity.project4.base.NavigationCommand
@@ -30,6 +39,7 @@ import com.udacity.project4.locationreminders.reminderslist.ReminderDataItem
 import com.udacity.project4.utils.setDisplayHomeAsUpEnabled
 import org.koin.android.ext.android.inject
 import com.udacity.project4.locationreminders.geofence.GeofenceTransitionsJobIntentService
+import com.udacity.project4.locationreminders.savereminder.selectreminderlocation.SelectLocationFragment.Companion.isRunningQAndAbove
 
 const val ACTION_GEOFENCE_EVENT = "ACTION_GEOFENCE_EVENT"
 
@@ -39,6 +49,7 @@ class SaveReminderFragment : BaseFragment() {
     private lateinit var binding: FragmentSaveReminderBinding
     private lateinit var map: GoogleMap
     private lateinit var geofencingClient: GeofencingClient
+    private val REQUEST_BACKGROUND_PERMISSIONS_REQUEST_CODE = 456
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -65,8 +76,12 @@ class SaveReminderFragment : BaseFragment() {
         }
 
         binding.saveReminder.setOnClickListener {
-            val reminderData = reminderDataItem()
-            addGeoFencingRequest(reminderData)
+            if (isBackgroundLocationPermissionApproved()){
+                val reminderData = reminderDataItem()
+                addGeoFencingRequest(reminderData)
+            } else {
+                requestBackgroundLocationAccessPermissions()
+            }
         }
 
         val mapFragment = childFragmentManager.findFragmentById(R.id.map) as SupportMapFragment?
@@ -84,6 +99,54 @@ class SaveReminderFragment : BaseFragment() {
             }
         } else {
             mapFragment?.view?.visibility = View.GONE
+        }
+    }
+
+    @TargetApi(29)
+    private fun isBackgroundLocationPermissionApproved(): Boolean {
+        return when {
+            isRunningQAndAbove -> PackageManager.PERMISSION_GRANTED == ActivityCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+            else -> true
+        }
+    }
+
+    @TargetApi(29)
+    private fun requestBackgroundLocationAccessPermissions() {
+        if (isBackgroundLocationPermissionApproved())
+            return
+        val permissionsArray = arrayOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+        val resultCode = REQUEST_BACKGROUND_PERMISSIONS_REQUEST_CODE
+
+        if (isRunningQAndAbove) {
+            requestPermissions(
+                permissionsArray,
+                resultCode
+            )
+        }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<String>,
+        grantResults: IntArray
+    ) {
+        if (requestCode == REQUEST_BACKGROUND_PERMISSIONS_REQUEST_CODE)
+        {
+            if (grantResults.isEmpty() || grantResults[0] == PackageManager.PERMISSION_DENIED){
+                Snackbar.make(
+                    binding.saveReminderView,
+                    R.string.permission_denied_explanation,
+                    Snackbar.LENGTH_INDEFINITE
+                )
+                    .setAction(R.string.settings) {
+                        startActivity(Intent().apply {
+                            action = Settings.ACTION_APPLICATION_DETAILS_SETTINGS
+                            data = Uri.fromParts("package", BuildConfig.APPLICATION_ID, null)
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        })
+                    }
+                    .show()
+            }
         }
     }
 
@@ -120,10 +183,6 @@ class SaveReminderFragment : BaseFragment() {
 
         geofencingClient.addGeofences(geofencingRequest, geofencePendingIntent).run {
             addOnSuccessListener {
-                Toast.makeText(
-                    requireContext(), R.string.geofences_added,
-                    Toast.LENGTH_SHORT
-                ).show()
                 _viewModel.validateAndSaveReminder(reminderData)
             }
             addOnFailureListener {
@@ -133,25 +192,6 @@ class SaveReminderFragment : BaseFragment() {
                 ).show()
             }
         }
-//        geofencingClient.removeGeofences(geofencePendingIntent).run {
-//            addOnCompleteListener {
-//                geofencingClient.addGeofences(geofencingRequest, geofencePendingIntent).run {
-//                    addOnSuccessListener {
-//                        Toast.makeText(
-//                            requireContext(), R.string.geofences_added,
-//                            Toast.LENGTH_SHORT
-//                        ).show()
-//                        _viewModel.validateAndSaveReminder(reminderData)
-//                    }
-//                    addOnFailureListener {
-//                        Toast.makeText(
-//                            requireContext(), R.string.geofences_not_added,
-//                            Toast.LENGTH_SHORT
-//                        ).show()
-//                    }
-//                }
-//            }
-//        }
     }
 
     private val geofencePendingIntent: PendingIntent by lazy {
@@ -161,7 +201,7 @@ class SaveReminderFragment : BaseFragment() {
             0,
             intent,
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                FLAG_IMMUTABLE or FLAG_UPDATE_CURRENT
+                FLAG_MUTABLE or FLAG_UPDATE_CURRENT
             } else {
                 FLAG_UPDATE_CURRENT
             }

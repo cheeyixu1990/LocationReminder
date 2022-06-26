@@ -1,13 +1,19 @@
 package com.udacity.project4.locationreminders
 
+import android.Manifest
 import android.annotation.SuppressLint
+import android.annotation.TargetApi
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
+import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
 import androidx.databinding.DataBindingUtil
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
@@ -17,6 +23,8 @@ import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.GroundOverlayOptions
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.MarkerOptions
+import com.google.android.material.snackbar.Snackbar
+import com.udacity.project4.BuildConfig
 import com.udacity.project4.R
 import com.udacity.project4.databinding.ActivityReminderDescriptionBinding
 import com.udacity.project4.locationreminders.reminderslist.ReminderDataItem
@@ -42,6 +50,7 @@ class ReminderDescriptionActivity : AppCompatActivity(), LocationListener, OnMap
     private var locationManager: LocationManager? = null
     private val MIN_TIME: Long = 400
     private val MIN_DISTANCE = 1000f
+    private val REQUEST_FOREGROUND_ONLY_PERMISSIONS_REQUEST_CODE = 123
 
     @SuppressLint("MissingPermission")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -55,7 +64,12 @@ class ReminderDescriptionActivity : AppCompatActivity(), LocationListener, OnMap
 
 
         locationManager =  getSystemService(Context.LOCATION_SERVICE) as LocationManager
-        locationManager!!.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, MIN_TIME, MIN_DISTANCE, this)
+
+        if (isForegroundLocationPermissionApproved()){
+            locationManager!!.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, MIN_TIME, MIN_DISTANCE, this)
+        } else {
+            requestForegroundLocationAccessPermissions()
+        }
 
         // Obtain the SupportMapFragment and get notified when the map is ready to be used.
         val mapFragment = supportFragmentManager
@@ -63,6 +77,50 @@ class ReminderDescriptionActivity : AppCompatActivity(), LocationListener, OnMap
 
         mapFragment.getMapAsync(this)
 
+    }
+
+    @TargetApi(29)
+    private fun isForegroundLocationPermissionApproved(): Boolean {
+        return PackageManager.PERMISSION_GRANTED == ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+    }
+
+    @TargetApi(29 )
+    private fun requestForegroundLocationAccessPermissions() {
+        if (isForegroundLocationPermissionApproved())
+            return
+        val permissionsArray = arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
+        val resultCode = REQUEST_FOREGROUND_ONLY_PERMISSIONS_REQUEST_CODE
+
+        requestPermissions(
+            permissionsArray,
+            resultCode
+        )
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQUEST_FOREGROUND_ONLY_PERMISSIONS_REQUEST_CODE)
+        {
+            if (grantResults.isEmpty() || grantResults[0] == PackageManager.PERMISSION_DENIED){
+                Snackbar.make(
+                    binding.reminderDescriptionView,
+                    R.string.foreground_permission_denied_explanation,
+                    Snackbar.LENGTH_LONG
+                )
+                    .setAction(R.string.settings) {
+                        startActivity(Intent().apply {
+                            action = Settings.ACTION_APPLICATION_DETAILS_SETTINGS
+                            data = Uri.fromParts("package", BuildConfig.APPLICATION_ID, null)
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        })
+                    }
+                    .show()
+            }
+        }
     }
 
     override fun onLocationChanged(location: Location) {
@@ -81,8 +139,11 @@ class ReminderDescriptionActivity : AppCompatActivity(), LocationListener, OnMap
         val homeLatLng = LatLng(latitude!!, longitude!!)
         this.map.moveCamera(CameraUpdateFactory.newLatLngZoom(homeLatLng, zoomLevel))
         this.map.addMarker(MarkerOptions().position(homeLatLng))
-        this.map.setMyLocationEnabled(true)
+        if (isForegroundLocationPermissionApproved()){
+            this.map.setMyLocationEnabled(true)
+        } else {
+            requestForegroundLocationAccessPermissions()
+        }
         this.map.uiSettings.setAllGesturesEnabled(false)
-
     }
 }
