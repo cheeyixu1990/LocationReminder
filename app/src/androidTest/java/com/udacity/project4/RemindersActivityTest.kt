@@ -137,6 +137,8 @@ class RemindersActivityTest :
 
         onView(withId(R.id.saveReminder)).perform(click())
 
+        Thread.sleep(500)
+
         onView(withText(R.string.reminder_saved)).inRoot(withDecorView(not(`is`(getActivity(appContext)?.getWindow()?.getDecorView())))).check(matches(isDisplayed()))
 
         onView(withId(R.id.noDataTextView)).check(matches(withEffectiveVisibility(Visibility.GONE)))

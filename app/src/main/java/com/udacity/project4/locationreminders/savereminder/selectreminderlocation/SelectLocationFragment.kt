@@ -6,6 +6,7 @@ import android.annotation.SuppressLint
 import android.annotation.TargetApi
 import android.content.Context
 import android.content.Intent
+import android.content.IntentSender
 import android.content.pm.PackageManager
 import android.content.res.Resources
 import android.location.Location
@@ -19,6 +20,11 @@ import android.util.Log
 import android.view.*
 import androidx.core.app.ActivityCompat
 import androidx.databinding.DataBindingUtil
+import com.google.android.gms.common.api.ResolvableApiException
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.LocationSettingsRequest
+import com.google.android.gms.location.Priority
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.SupportMapFragment
@@ -51,6 +57,7 @@ class SelectLocationFragment : BaseFragment(), LocationListener {
     private val MIN_TIME: Long = 400
     private val MIN_DISTANCE = 1000f
     private val REQUEST_FOREGROUND_ONLY_PERMISSIONS_REQUEST_CODE = 123
+    private val REQUEST_TURN_DEVICE_LOCATION_ON = 741
     companion object {
         val isRunningQAndAbove = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
     }
@@ -97,6 +104,7 @@ class SelectLocationFragment : BaseFragment(), LocationListener {
             }
             map.moveCamera(CameraUpdateFactory.newLatLngZoom(location, zoomLevel))
             if (isForegroundLocationPermissionApproved()){
+                checkDeviceLocationSettings()
                 map.setMyLocationEnabled(true)
                 locationManager!!.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, MIN_TIME, MIN_DISTANCE, this)
             } else {
@@ -235,6 +243,7 @@ class SelectLocationFragment : BaseFragment(), LocationListener {
         )
     }
 
+    @SuppressLint("MissingPermission")
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<String>,
@@ -256,7 +265,64 @@ class SelectLocationFragment : BaseFragment(), LocationListener {
                         })
                     }
                     .show()
+            } else if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                checkDeviceLocationSettings()
+                map.isMyLocationEnabled = true
+                locationManager!!.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, MIN_TIME, MIN_DISTANCE, this)
             }
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun checkDeviceLocationSettings(resolve:Boolean = true) {
+        val locationRequest = LocationRequest.create().apply {
+            priority = Priority.PRIORITY_LOW_POWER
+        }
+        val builder = LocationSettingsRequest.Builder().addLocationRequest(locationRequest)
+        val settingsClient = LocationServices.getSettingsClient(requireActivity())
+        val locationSettingsResponseTask =
+            settingsClient.checkLocationSettings(builder.build())
+        locationSettingsResponseTask.addOnFailureListener { exception ->
+            if (exception is ResolvableApiException && resolve){
+                try {
+                    exception.startResolutionForResult(requireActivity(),
+                        REQUEST_TURN_DEVICE_LOCATION_ON)
+                } catch (sendEx: IntentSender.SendIntentException) {
+                    Log.d(TAG, "Error getting location settings resolution: " + sendEx.message)
+                }
+            } else {
+                Snackbar.make(
+                    binding.mapSelectionView,
+                    R.string.location_required_error, Snackbar.LENGTH_INDEFINITE
+                ).setAction(android.R.string.ok) {
+                    checkDeviceLocationSettings()
+                }.show()
+            }
+        }
+        locationSettingsResponseTask.addOnCompleteListener {
+            if ( it.isSuccessful ) {
+                map.isMyLocationEnabled = true
+                locationManager!!.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, MIN_TIME, MIN_DISTANCE, this)
+            }
+        }
+    }
+
+    override fun onProviderDisabled(provider: String) {
+2
+    }
+
+    override fun onProviderEnabled(provider: String) {
+
+    }
+
+    override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {
+
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_TURN_DEVICE_LOCATION_ON) {
+            checkDeviceLocationSettings(false)
         }
     }
 }

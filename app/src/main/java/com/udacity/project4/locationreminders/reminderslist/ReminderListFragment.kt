@@ -62,7 +62,7 @@ class ReminderListFragment : BaseFragment() {
     }
 
     private fun showWelcomeMessage() {
-        Toast.makeText(requireContext(), "Welcome ${FirebaseAuth.getInstance().currentUser?.displayName}", Toast.LENGTH_LONG).show()
+        Toast.makeText(requireContext(), "Welcome ${FirebaseAuth.getInstance().currentUser?.displayName}", Toast.LENGTH_SHORT).show()
     }
 
     private fun navigateToLogin() {
